@@ -20,7 +20,7 @@ Fuses satellite imagery, ground sensor data, and meteorological forecasts to:
 | Ground sensors | CAAQMS via Open-Meteo API |
 | Forecasting | XGBoost (24h AQI prediction) |
 | Source attribution | Gaussian plume dispersion model |
-| Agent orchestration | CrewAI (4-agent pipeline) |
+| Agent orchestration | Custom multi-agent pipeline (Anthropic SDK) |
 | Multilingual advisory | Anthropic Claude API |
 | Dashboard | Streamlit + Folium + Plotly |
 
