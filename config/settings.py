@@ -52,6 +52,7 @@ DEFAULT_CITY = "Kolkata"
 # ──────────────────────────────────────────────
 OPEN_METEO_AQI_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
 OPEN_METEO_WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
+OPEN_METEO_WEATHER_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 OPENWEATHER_AQI_URL = "https://api.openweathermap.org/data/2.5/air_pollution"
 
 # ──────────────────────────────────────────────
