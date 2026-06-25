@@ -1,4 +1,4 @@
-# VayuDrishti (वायुदृष्टि)
+# VayuDrishti
 
 **AI-Powered Urban Air Quality Intelligence for Smart City Intervention**
 
