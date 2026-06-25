@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+venv/
+.venv/
+
+# Data (too large for git)
+data/raw/
+data/processed/
+data/satellite/
+
+# Keep geojson (small, needed for demo)
+# data/geojson/ is tracked
+
+# Models (large binary files)
+models/saved/*.joblib
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Demo video (too large)
+demo/demo_video/*.mp4
+demo/demo_video/*.mov

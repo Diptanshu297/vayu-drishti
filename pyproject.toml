@@ -1,0 +1,46 @@
+[project]
+name = "vayu-drishti"
+version = "0.1.0"
+description = "AI-Powered Urban Air Quality Intelligence for Smart City Intervention"
+requires-python = ">=3.11"
+dependencies = [
+    # Data
+    "pandas>=2.2",
+    "numpy>=1.26",
+
+    # ML
+    "scikit-learn>=1.5",
+    "xgboost>=2.1",
+    "joblib>=1.4",
+
+    # Geospatial
+    "folium>=0.17",
+    "osmnx>=1.9",
+    "geopandas>=1.0",
+    "shapely>=2.0",
+    "rasterio>=1.3",
+
+    # Dashboard
+    "streamlit>=1.38",
+    "streamlit-folium>=0.22",
+    "plotly>=5.24",
+
+    # Data fetching
+    "requests>=2.32",
+    "python-dotenv>=1.0",
+
+    # Multi-agent
+    "crewai>=0.80",
+
+    # LLM
+    "anthropic>=0.39",
+
+    # Satellite
+    "earthengine-api>=1.1",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "jupyter>=1.0",
+    "ipykernel>=6.0",
+]
