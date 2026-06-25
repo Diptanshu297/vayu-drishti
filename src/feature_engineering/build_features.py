@@ -83,6 +83,10 @@ def build_features(aqi_df: pd.DataFrame, weather_df: pd.DataFrame) -> pd.DataFra
     # Merge AQI and weather on timestamp
     df = pd.merge(aqi_df, weather_df, on="timestamp", how="inner")
 
+    # Convert CO from μg/m³ (Open-Meteo) to mg/m³ (NAQI breakpoints)
+    if "co" in df.columns:
+        df["co"] = df["co"] / 1000.0
+
     # Compute overall AQI
     df = add_aqi_column(df)
 

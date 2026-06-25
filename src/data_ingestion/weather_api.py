@@ -1,6 +1,6 @@
 """
 Fetch historical and current weather data from Open-Meteo.
-Uses archive endpoint for past dates, forecast endpoint for recent/future.
+Splits requests across archive and forecast endpoints as needed.
 Free, no API key required.
 """
 
@@ -20,49 +20,30 @@ HOURLY_VARS = [
     "cloud_cover",
 ]
 
+COLUMN_MAP = {
+    "time": "timestamp",
+    "temperature_2m": "temperature",
+    "relative_humidity_2m": "humidity",
+    "wind_speed_10m": "wind_speed",
+    "wind_direction_10m": "wind_direction",
+    "surface_pressure": "pressure",
+    "cloud_cover": "cloud_cover",
+}
 
-def fetch_weather(
-    lat: float,
-    lon: float,
-    start_date: str,
-    end_date: str,
-) -> pd.DataFrame:
-    """
-    Fetch hourly weather data from Open-Meteo.
-    Automatically picks archive vs forecast endpoint based on dates.
 
-    Args:
-        lat, lon: coordinates
-        start_date, end_date: 'YYYY-MM-DD' format
-
-    Returns:
-        DataFrame with columns:
-            timestamp, temperature, humidity, wind_speed,
-            wind_direction, pressure, cloud_cover
-    """
-    # Determine which endpoint to use
-    end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-    cutoff = datetime.now() - timedelta(days=5)
-
-    if end_dt < cutoff:
-        url = OPEN_METEO_WEATHER_ARCHIVE_URL
-    else:
-        url = OPEN_METEO_WEATHER_URL
-
+def _fetch_chunk(url: str, lat: float, lon: float, start: str, end: str) -> pd.DataFrame:
+    """Fetch a single date range from one endpoint."""
     params = {
         "latitude": lat,
         "longitude": lon,
-        "start_date": start_date,
-        "end_date": end_date,
+        "start_date": start,
+        "end_date": end,
         "hourly": ",".join(HOURLY_VARS),
         "timezone": "Asia/Kolkata",
     }
-
     response = requests.get(url, params=params, timeout=30)
     response.raise_for_status()
-    data = response.json()
-
-    hourly = data["hourly"]
+    hourly = response.json()["hourly"]
 
     df = pd.DataFrame({
         "timestamp": pd.to_datetime(hourly["time"]),
@@ -73,5 +54,48 @@ def fetch_weather(
         "pressure": hourly["surface_pressure"],
         "cloud_cover": hourly["cloud_cover"],
     })
+    return df
 
+
+def fetch_weather(
+    lat: float,
+    lon: float,
+    start_date: str,
+    end_date: str,
+) -> pd.DataFrame:
+    """
+    Fetch hourly weather data from Open-Meteo.
+    Automatically splits across archive and forecast endpoints
+    when the date range spans both historical and recent data.
+    """
+    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+
+    # Archive covers up to ~5 days ago; forecast covers last 5 days + future
+    cutoff_dt = datetime.now() - timedelta(days=7)
+    cutoff_str = cutoff_dt.strftime("%Y-%m-%d")
+
+    chunks = []
+
+    if start_dt < cutoff_dt:
+        # Need archive for the historical portion
+        archive_end = min(end_dt, cutoff_dt).strftime("%Y-%m-%d")
+        print(f"    [weather] archive: {start_date} → {archive_end}")
+        chunks.append(_fetch_chunk(
+            OPEN_METEO_WEATHER_ARCHIVE_URL, lat, lon, start_date, archive_end
+        ))
+
+    if end_dt >= cutoff_dt:
+        # Need forecast for the recent portion
+        forecast_start = max(start_dt, cutoff_dt).strftime("%Y-%m-%d")
+        print(f"    [weather] forecast: {forecast_start} → {end_date}")
+        chunks.append(_fetch_chunk(
+            OPEN_METEO_WEATHER_URL, lat, lon, forecast_start, end_date
+        ))
+
+    if not chunks:
+        raise ValueError(f"No data available for range {start_date} to {end_date}")
+
+    df = pd.concat(chunks, ignore_index=True)
+    df = df.drop_duplicates(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
     return df
