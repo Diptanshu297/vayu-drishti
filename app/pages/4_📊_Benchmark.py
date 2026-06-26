@@ -111,7 +111,7 @@ st.dataframe(
         "Improvement (%)": "{:.1f}",
         "MAE": "{:.2f}",
         "R²": "{:.4f}",
-    }).background_gradient(subset=["Improvement (%)"], cmap="RdYlGn"),
+    }),
     hide_index=True,
     use_container_width=True,
 )

@@ -20,7 +20,12 @@ def compute_sub_index(pollutant: str, concentration: float) -> int | None:
     Returns:
         Sub-index (0-500) or None if pollutant not recognized or out of range.
     """
+    import math
+
     if pollutant not in AQI_BREAKPOINTS:
+        return None
+
+    if concentration is None or (isinstance(concentration, float) and math.isnan(concentration)):
         return None
 
     breakpoints = AQI_BREAKPOINTS[pollutant]
@@ -56,10 +61,13 @@ def compute_aqi(concentrations: dict[str, float]) -> dict:
     sub_indices = {}
 
     for pollutant, conc in concentrations.items():
-        if conc is not None and conc >= 0:
-            si = compute_sub_index(pollutant, conc)
-            if si is not None:
-                sub_indices[pollutant] = si
+        try:
+            if conc is not None and conc == conc and float(conc) >= 0:  # conc != conc catches NaN
+                si = compute_sub_index(pollutant, float(conc))
+                if si is not None:
+                    sub_indices[pollutant] = si
+        except (TypeError, ValueError):
+            continue
 
     if not sub_indices:
         return {
