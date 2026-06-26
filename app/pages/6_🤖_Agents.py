@@ -65,11 +65,11 @@ with st.expander("📥 Agent input data"):
 st.divider()
 
 # Check for API key
-api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+api_key = os.environ.get("GEMINI_API_KEY", "")
 
 if not api_key:
-    st.warning("Set ANTHROPIC_API_KEY environment variable to run the agent pipeline live.")
-    st.code("$env:ANTHROPIC_API_KEY = 'your-key-here'  # PowerShell", language="powershell")
+    st.warning("Set GEMINI_API_KEY environment variable to run the agent pipeline live.")
+    st.code("$env:GEMINI_API_KEY = 'your-key-here'  # PowerShell", language="powershell")
 
     # Show pre-recorded demo
     st.divider()

@@ -1,19 +1,19 @@
 """
-Lightweight multi-agent orchestration.
-Replaces CrewAI with direct Anthropic SDK calls — same agent architecture,
-zero dependency bloat (no kubernetes, no chromadb).
-
-Each agent = system prompt + tools + Claude API call.
+Lightweight multi-agent orchestration using Google Gemini API (free).
+Each agent = system prompt + tools + Gemini API call.
 Agents run sequentially, passing structured output to the next.
 """
 
 import json
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Callable
 
-import anthropic
+import requests
 
+
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"
 
 @dataclass
 class Agent:
@@ -24,19 +24,12 @@ class Agent:
     tools: dict[str, Callable] = field(default_factory=dict)
 
     def run(self, input_data: dict, verbose: bool = True) -> dict:
-        """
-        Execute this agent: call Claude with role + input, optionally use tools.
+        """Execute this agent via Gemini API."""
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+        if not api_key:
+            return self._mock_run(input_data, verbose)
 
-        Args:
-            input_data: structured data from previous agent or initial input
-            verbose: print agent reasoning to console
-
-        Returns:
-            dict with 'output' (structured result) and 'reasoning' (text log)
-        """
-        client = anthropic.Anthropic()
-
-        system_prompt = f"""You are {self.name}, a {self.role}.
+        prompt = f"""You are {self.name}, a {self.role}.
 
 {self.instructions}
 
@@ -46,34 +39,39 @@ IMPORTANT: You must respond with a valid JSON object containing:
 - "alerts": list of any alerts or warnings (list of strings)
 - "status": "complete" or "needs_attention"
 
-Respond with ONLY the JSON object. No markdown, no backticks, no preamble."""
+Respond with ONLY the JSON object. No markdown, no backticks, no preamble.
 
-        tool_descriptions = ""
-        if self.tools:
-            tool_descriptions = "\n\nAvailable tools (already executed, results in input):\n"
-            for name, func in self.tools.items():
-                tool_descriptions += f"- {name}: {func.__doc__ or 'No description'}\n"
-
-        user_message = f"""Input data:
+Input data:
 {json.dumps(input_data, indent=2, default=str, ensure_ascii=False)}
-{tool_descriptions}
+
 Execute your analysis and respond with the JSON result."""
+
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": 0.3,
+                "maxOutputTokens": 1500,
+            },
+        }
 
         start_time = time.time()
 
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1500,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_message}],
-        )
+        try:
+            response = requests.post(
+                f"{GEMINI_URL}?key={api_key}",
+                json=payload,
+                timeout=30,
+            )
+            response.raise_for_status()
+            data = response.json()
+            raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+        except Exception as e:
+            return self._mock_run(input_data, verbose, error=str(e))
 
         elapsed = round(time.time() - start_time, 1)
-        raw_text = response.content[0].text
 
         # Parse JSON response
         try:
-            # Strip any markdown fencing
             cleaned = raw_text.strip()
             if cleaned.startswith("```"):
                 cleaned = cleaned.split("\n", 1)[1]
@@ -109,12 +107,28 @@ Execute your analysis and respond with the JSON result."""
             "raw_response": raw_text,
         }
 
+    def _mock_run(self, input_data: dict, verbose: bool, error: str = "No API key") -> dict:
+        """Fallback when API is unavailable."""
+        if verbose:
+            print(f"\n{'─'*60}")
+            print(f"🤖 {self.name} (mock — {error})")
+            print(f"{'─'*60}")
+
+        return {
+            "agent": self.name,
+            "output": {
+                "analysis": f"[Mock] {self.name} would analyze the input data here. ({error})",
+                "result": {},
+                "alerts": [f"Running in mock mode: {error}"],
+                "status": "complete",
+            },
+            "elapsed_seconds": 0,
+            "raw_response": "",
+        }
+
 
 class AgentPipeline:
-    """
-    Sequential pipeline of agents.
-    Each agent receives the accumulated context from all previous agents.
-    """
+    """Sequential pipeline of agents."""
 
     def __init__(self, agents: list[Agent], verbose: bool = True):
         self.agents = agents
@@ -122,12 +136,6 @@ class AgentPipeline:
         self.execution_log: list[dict] = []
 
     def run(self, initial_input: dict) -> dict:
-        """
-        Execute all agents in sequence.
-
-        Returns:
-            dict with final output and full execution log.
-        """
         context = {"initial_input": initial_input}
         self.execution_log = []
 
@@ -141,8 +149,6 @@ class AgentPipeline:
         for agent in self.agents:
             result = agent.run(context, verbose=self.verbose)
             self.execution_log.append(result)
-
-            # Add this agent's output to context for the next agent
             context[agent.name] = result["output"]
 
         total_elapsed = round(time.time() - total_start, 1)
@@ -159,10 +165,6 @@ class AgentPipeline:
         }
 
     def get_log_for_display(self) -> list[dict]:
-        """
-        Get a display-friendly version of the execution log
-        for the Streamlit 'Agent Activity' page.
-        """
         display_log = []
         for entry in self.execution_log:
             display_log.append({

@@ -1,15 +1,17 @@
 """
-Generate multilingual health advisories using Claude API.
+Generate multilingual health advisories using Google Gemini API (free).
 Falls back to templates when API is unavailable.
 """
 
 import json
 import os
 
-import anthropic
+import requests
 
 from config.settings import AQI_CATEGORIES
 
+
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"
 
 def generate_advisory(
     forecast_data: dict,
@@ -20,33 +22,19 @@ def generate_advisory(
     city: str = "Kolkata",
 ) -> dict:
     """
-    Generate a health advisory using Claude, with template fallback.
-
-    Args:
-        forecast_data: dict with keys like aqi, dominant_pollutant, duration_hours
-        attribution_data: dict from compute_source_attribution, or None
-        audience: one of "school", "administrator", "citizen", "worker"
-        language: one of "bengali", "hindi", "kannada", "english"
-        ward_name: name of the ward/area
-        city: city name
-
-    Returns:
-        dict with:
-            - advisory: the generated text
-            - source: "llm" or "template"
-            - language: language used
-            - audience: audience type
-            - verification: back-translation (if LLM)
+    Generate a health advisory using Gemini, with template fallback.
     """
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key:
+        return _generate_template_advisory(forecast_data, audience, language, ward_name)
+
     try:
         return _generate_llm_advisory(
-            forecast_data, attribution_data, audience, language, ward_name, city
+            forecast_data, attribution_data, audience, language, ward_name, city, api_key
         )
     except Exception as e:
         print(f"LLM advisory failed ({e}), falling back to template")
-        return _generate_template_advisory(
-            forecast_data, audience, language, ward_name
-        )
+        return _generate_template_advisory(forecast_data, audience, language, ward_name)
 
 
 def _generate_llm_advisory(
@@ -56,10 +44,9 @@ def _generate_llm_advisory(
     language: str,
     ward_name: str,
     city: str,
+    api_key: str,
 ) -> dict:
-    """Generate advisory via Claude API."""
-    client = anthropic.Anthropic()
-
+    """Generate advisory via Google Gemini API."""
     language_names = {
         "bengali": "Bengali (বাংলা)",
         "hindi": "Hindi (हिन्दी)",
@@ -67,7 +54,7 @@ def _generate_llm_advisory(
         "english": "English",
     }
 
-    system_prompt = f"""You are a public health communication specialist for the {city} Municipal Corporation's air quality advisory system.
+    prompt = f"""You are a public health communication specialist for the {city} Municipal Corporation's air quality advisory system.
 
 Your audience: {audience}
 Language: {language_names.get(language, language)}
@@ -80,25 +67,34 @@ Rules:
 - For citizens/workers: keep it under 3 sentences. Actionable advice only. Use the AQI category name, not raw numbers.
 - Never use alarming language. Be direct, calm, factual.
 - Include time window ("until tomorrow evening", not "for 18 hours").
-- At the end, add a section marked [VERIFICATION] with an English back-translation of the advisory above. This is for quality checking and will be stripped before display.
-"""
 
-    user_message = f"""Generate a health advisory based on this data:
+Generate a health advisory based on this data:
 
 Forecast: {json.dumps(forecast_data, ensure_ascii=False)}
 {"Attribution: " + json.dumps(attribution_data, ensure_ascii=False) if attribution_data else "Attribution: not available"}
 
 Generate an immediately actionable advisory for {audience} in {ward_name}, {city}.
+
+After the advisory, add a section starting with [VERIFICATION] containing an English back-translation for quality checking.
 """
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=800,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_message}],
-    )
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 800,
+        },
+    }
 
-    full_text = response.content[0].text
+    response = requests.post(
+        f"{GEMINI_URL}?key={api_key}",
+        json=payload,
+        timeout=30,
+    )
+    response.raise_for_status()
+
+    data = response.json()
+    full_text = data["candidates"][0]["content"]["parts"][0]["text"]
 
     # Split advisory from verification
     if "[VERIFICATION]" in full_text:
@@ -125,8 +121,7 @@ def _generate_template_advisory(
     ward_name: str,
 ) -> dict:
     """Template-based fallback when LLM is unavailable."""
-    aqi = forecast_data.get("aqi", 0)
-    category = _get_category_label(aqi)
+    aqi = forecast_data.get("aqi", 0) or 0
     hours = forecast_data.get("duration_hours", 24)
 
     templates = {
@@ -150,7 +145,6 @@ def _generate_template_advisory(
         },
     }
 
-    # Map AQI to severity key
     if aqi > 300:
         severity = "severe"
     elif aqi > 200:
@@ -171,11 +165,3 @@ def _generate_template_advisory(
         "audience": audience,
         "verification": "",
     }
-
-
-def _get_category_label(aqi: int) -> str:
-    for cat in AQI_CATEGORIES:
-        low, high = cat["range"]
-        if low <= aqi <= high:
-            return cat["label"]
-    return "Severe"
