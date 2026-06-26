@@ -11,7 +11,7 @@ import requests
 from config.settings import AQI_CATEGORIES
 
 
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
 
 def generate_advisory(
     forecast_data: dict,
@@ -104,6 +104,9 @@ After the advisory, add a section starting with [VERIFICATION] containing an Eng
     else:
         advisory = full_text.strip()
         verification = ""
+
+    # Clean markdown artifacts
+    advisory = advisory.replace("**", "").replace("##", "").replace("# ", "")
 
     return {
         "advisory": advisory,

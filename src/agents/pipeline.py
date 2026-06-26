@@ -13,7 +13,8 @@ from typing import Callable
 import requests
 
 
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
+
 
 @dataclass
 class Agent:
@@ -146,7 +147,9 @@ class AgentPipeline:
 
         total_start = time.time()
 
-        for agent in self.agents:
+        for i, agent in enumerate(self.agents):
+            if i > 0:
+                time.sleep(5)  # avoid Gemini free tier rate limit
             result = agent.run(context, verbose=self.verbose)
             self.execution_log.append(result)
             context[agent.name] = result["output"]

@@ -118,35 +118,56 @@ if not api_key:
             st.divider()
 
 else:
-    # Live agent execution
-    if st.button("🚀 Run agent pipeline", type="primary"):
+    # Check for cached results
+    cached_path = os.path.join("data", "processed", f"agent_results_{city.lower()}.json")
+    has_cache = os.path.exists(cached_path)
+
+    col_a, col_b = st.columns(2)
+
+    with col_a:
+        run_live = st.button("🚀 Run live (slow, rate limited)", type="secondary")
+
+    with col_b:
+        load_cache = st.button("📂 Load pre-computed results", type="primary", disabled=not has_cache)
+
+    if not has_cache:
+        st.caption("No cached results. Run: `uv run python scripts/run_agents.py --city " + city + "`")
+
+    results_to_show = None
+
+    if load_cache and has_cache:
+        with open(cached_path, encoding="utf-8") as f:
+            cached = json.load(f)
+        results_to_show = cached["execution_log"]
+        st.success("Loaded pre-computed results")
+
+    if run_live:
         from src.agents.vayu_agents import build_pipeline
 
         pipeline = build_pipeline(verbose=True)
 
-        with st.spinner("Running 4-agent pipeline..."):
+        with st.spinner("Running 4-agent pipeline (~30s with rate limit delays)..."):
             result = pipeline.run(input_data)
 
         st.success(f"Pipeline complete — {result['total_elapsed']}s total")
+        results_to_show = result["execution_log"]
 
-        # Display each agent's output
-        for entry in result["execution_log"]:
+    if results_to_show:
+        for entry in results_to_show:
             with st.container():
-                status = entry["output"].get("status", "unknown")
+                status = entry.get("output", {}).get("status", "unknown")
                 status_icon = "✅" if status == "complete" else "⚠️"
+                elapsed = entry.get("elapsed_seconds", "?")
 
-                st.markdown(f"### {status_icon} {entry['agent']} ({entry['elapsed_seconds']}s)")
-                st.markdown(entry["output"].get("analysis", "No analysis"))
+                st.markdown(f"### {status_icon} {entry['agent']} ({elapsed}s)")
+                st.markdown(entry.get("output", {}).get("analysis", "No analysis"))
 
-                alerts = entry["output"].get("alerts", [])
+                alerts = entry.get("output", {}).get("alerts", [])
                 if alerts:
                     for alert in alerts:
                         st.warning(alert)
 
                 with st.expander("Raw output"):
-                    st.json(entry["output"])
+                    st.json(entry.get("output", {}))
 
                 st.divider()
-
-        # Save log for future display
-        st.session_state["agent_log"] = result["execution_log"]

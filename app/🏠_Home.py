@@ -8,6 +8,10 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Load .env file so API keys persist
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
