@@ -27,7 +27,7 @@ Fuses satellite imagery, ground sensor data, and meteorological forecasts to:
 ## Quick start
 
 ```bash
-# Clone and install
+
 git clone https://github.com/Diptanshu297/vayu-drishti.git
 cd vayu-drishti
 uv sync
